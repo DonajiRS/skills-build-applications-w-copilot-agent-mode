@@ -4,82 +4,261 @@ from bson import ObjectId
 from datetime import timedelta
 from django.conf import settings
 from pymongo import MongoClient
+from django.utils import timezone
+import random
+
+# Datos de prueba definidos localmente
+test_data = {
+    "users": [
+        {
+            "_id": ObjectId(),
+            "username": "thundergod", 
+            "email": "thundergod@mhigh.edu"
+        },
+        {
+            "_id": ObjectId(),
+            "username": "metalgeek",
+            "email": "metalgeek@mhigh.edu"
+        },
+        {
+            "_id": ObjectId(),
+            "username": "zerocool",
+            "email": "zerocool@mhigh.edu"
+        },
+        {
+            "_id": ObjectId(),
+            "username": "crashoverride",
+            "email": "crashoverride@mhigh.edu"
+        },
+        {
+            "_id": ObjectId(),
+            "username": "sleeptoken",
+            "email": "sleeptoken@mhigh.edu"
+        }
+    ],
+    "teams": [
+        {
+            "_id": ObjectId(),
+            "name": "Blue Team"
+        },
+        {
+            "_id": ObjectId(),
+            "name": "Gold Team"
+        }
+    ],
+    "activities": [
+        {
+            "_id": ObjectId(),
+            "user": "thundergod",
+            "activity_type": "Cycling",
+            "duration": timedelta(hours=1)
+        },
+        {
+            "_id": ObjectId(),
+            "user": "metalgeek",
+            "activity_type": "Crossfit",
+            "duration": timedelta(hours=2)
+        },
+        {
+            "_id": ObjectId(),
+            "user": "zerocool",
+            "activity_type": "Running",
+            "duration": timedelta(hours=1, minutes=30)
+        },
+        {
+            "_id": ObjectId(),
+            "user": "crashoverride",
+            "activity_type": "Strength",
+            "duration": timedelta(minutes=30)
+        },
+        {
+            "_id": ObjectId(),
+            "user": "sleeptoken",
+            "activity_type": "Swimming",
+            "duration": timedelta(hours=1, minutes=15)
+        }
+    ],
+    "leaderboard": [
+        {
+            "_id": ObjectId(),
+            "score": 100
+        },
+        {
+            "_id": ObjectId(),
+            "score": 90
+        },
+        {
+            "_id": ObjectId(),
+            "score": 95
+        },
+        {
+            "_id": ObjectId(),
+            "score": 85
+        },
+        {
+            "_id": ObjectId(),
+            "score": 80
+        }
+    ],
+    "workouts": [
+        {
+            "_id": ObjectId(),
+            "name": "Cycling Training",
+            "description": "Training for a road cycling event"
+        },
+        {
+            "_id": ObjectId(),
+            "name": "Crossfit",
+            "description": "Training for a crossfit competition"
+        },
+        {
+            "_id": ObjectId(),
+            "name": "Running Training",
+            "description": "Training for a marathon"
+        },
+        {
+            "_id": ObjectId(),
+            "name": "Strength Training",
+            "description": "Training for strength"
+        },
+        {
+            "_id": ObjectId(),
+            "name": "Swimming Training",
+            "description": "Training for a swimming competition"
+        }
+    ]
+}
 
 class Command(BaseCommand):
     help = 'Populate the database with test data for users, teams, activities, leaderboard, and workouts'
 
     def handle(self, *args, **kwargs):
-        # Asegúrate de que las colecciones se vacíen completamente
-        client = MongoClient(host=settings.DATABASES['default'].get('HOST', 'localhost'), port=int(settings.DATABASES['default'].get('PORT', 27017)))
+        # Connect to MongoDB
+        client = MongoClient(settings.DATABASES['default']['HOST'], settings.DATABASES['default']['PORT'])
         db = client[settings.DATABASES['default']['NAME']]
-        db.users.drop()
-        db.teams.drop()
-        db.activity.drop()
-        db.leaderboard.drop()
-        db.workouts.drop()
 
-        # Elimina índices antes de insertar datos
-        db.users.drop_indexes()
-        db.teams.drop_indexes()
-        db.activity.drop_indexes()
-        db.leaderboard.drop_indexes()
-        db.workouts.drop_indexes()
+        # Drop existing collections and their indexes to avoid duplicate key errors
+        db.tracker_app_user.drop()
+        db.tracker_app_team.drop()
+        db.tracker_app_activity.drop()
+        db.tracker_app_leaderboard.drop()
+        db.tracker_app_workout.drop()
 
-        # Elimina todos los índices de la colección `users` antes de recrearla
-        db.users.drop_indexes()
+        # Recreate collections without indexes
+        db.create_collection('tracker_app_user')
+        db.create_collection('tracker_app_team')
+        db.create_collection('tracker_app_activity')
+        db.create_collection('tracker_app_leaderboard')
+        db.create_collection('tracker_app_workout')
 
-        # Elimina el índice `email` antes de insertar datos
-        db.users.drop_index("email_1")
+        # Insertar usuarios directamente usando PyMongo
+        self.stdout.write("Creating users...")
+        user_docs = []
+        for idx, user_data in enumerate(test_data["users"]):
+            # Crear un ID único para cada usuario
+            user_id = ObjectId()
+            user_docs.append({
+                "_id": user_id,
+                "email": user_data["email"],
+                "name": user_data["username"],
+                "age": random.randint(14, 18)  # Random age for high school students
+            })
+        
+        # Insertar directamente en la colección de MongoDB
+        db.tracker_app_user.insert_many(user_docs)
+        db.tracker_app_user.create_index("email", unique=True)
+        self.stdout.write(f"Created {len(user_docs)} users")
+        
+        # Mapear nombres de usuario a IDs para uso posterior
+        username_to_id = {doc["name"]: doc["_id"] for doc in user_docs}
+        
+        # Insertar equipos directamente usando PyMongo
+        self.stdout.write("Creating teams...")
+        team_docs = []
+        team_ids = []
+        for team_data in test_data["teams"]:
+            team_id = ObjectId()
+            team_ids.append(team_id)
+            team_docs.append({
+                "_id": team_id,
+                "name": team_data["name"],
+                "members": []  # Inicialmente sin miembros
+            })
+        
+        db.tracker_app_team.insert_many(team_docs)
+        self.stdout.write(f"Created {len(team_docs)} teams")
+        
+        # Asignar usuarios a equipos alternando
+        for idx, user_id in enumerate(username_to_id.values()):
+            team_idx = idx % len(team_ids)
+            db.tracker_app_team.update_one(
+                {"_id": team_ids[team_idx]},
+                {"$push": {"members": user_id}}
+            )
+        
+        # Insertar actividades directamente usando PyMongo
+        self.stdout.write("Creating activities...")
+        activity_docs = []
+        today = timezone.now().date().isoformat()
+        
+        for activity_data in test_data["activities"]:
+            username = activity_data["user"]
+            user_id = username_to_id.get(username)
+            
+            if user_id:
+                # Convertir timedelta a minutos
+                duration_minutes = int(activity_data["duration"].total_seconds() / 60)
+                activity_docs.append({
+                    "_id": ObjectId(),
+                    "user_id": user_id,
+                    "type": activity_data["activity_type"],
+                    "duration": duration_minutes,
+                    "date": today
+                })
+        
+        db.tracker_app_activity.insert_many(activity_docs)
+        self.stdout.write(f"Created {len(activity_docs)} activities")
 
-        # Elimina y recrea la colección `users` para garantizar que esté limpia
-        db.drop_collection("users")
-        db.create_collection("users")
+        # Insertar entradas de tablero de clasificación directamente usando PyMongo
+        self.stdout.write("Creating leaderboard entries...")
+        leaderboard_docs = []
+        
+        # Asignar entradas a equipos alternadamente
+        for idx, leaderboard_data in enumerate(test_data["leaderboard"]):
+            team_idx = idx % len(team_ids)
+            leaderboard_docs.append({
+                "_id": ObjectId(),
+                "team_id": team_ids[team_idx],
+                "points": leaderboard_data["score"]
+            })
+        
+        db.tracker_app_leaderboard.insert_many(leaderboard_docs)
+        self.stdout.write(f"Created {len(leaderboard_docs)} leaderboard entries")
 
-        # Elimina todos los documentos de la colección `users` y recrea los índices después de insertar datos
-        db.users.delete_many({})
-
-        # Create users
-        users = [
-            User(id=ObjectId(), email='thundergod@mhigh.edu', name='Thor', age=30),
-            User(id=ObjectId(), email='metalgeek@mhigh.edu', name='Tony Stark', age=35),
-            User(id=ObjectId(), email='zerocool@mhigh.edu', name='Steve Rogers', age=32),
-            User(id=ObjectId(), email='crashoverride@mhigh.edu', name='Natasha Romanoff', age=28),
-            User(id=ObjectId(), email='sleeptoken@mhigh.edu', name='Bruce Banner', age=40),
-        ]
-        User.objects.bulk_create(users)
-        db.users.create_index("email", unique=True)
-
-        # Create teams
-        team1 = Team(name='Blue Team')
-        team2 = Team(name='Gold Team')
-        team1.save()
-        team2.save()
-
-        # Create activities
-        activities = [
-            Activity(user=users[0], type='Cycling', duration=60, date='2025-04-09'),
-            Activity(user=users[1], type='Crossfit', duration=120, date='2025-04-08'),
-            Activity(user=users[2], type='Running', duration=90, date='2025-04-07'),
-            Activity(user=users[3], type='Strength', duration=30, date='2025-04-06'),
-            Activity(user=users[4], type='Swimming', duration=75, date='2025-04-05'),
-        ]
-        Activity.objects.bulk_create(activities)
-
-        # Create leaderboard entries
-        leaderboard_entries = [
-            Leaderboard(team=team1, points=100),
-            Leaderboard(team=team2, points=90),
-        ]
-        Leaderboard.objects.bulk_create(leaderboard_entries)
-
-        # Create workouts
-        workouts = [
-            Workout(name='Cycling Training', description='Road cycling event training', duration=60),
-            Workout(name='Crossfit', description='Crossfit competition training', duration=120),
-            Workout(name='Running Training', description='Marathon training', duration=90),
-            Workout(name='Strength Training', description='Strength improvement training', duration=30),
-            Workout(name='Swimming Training', description='Swimming competition training', duration=75),
-        ]
-        Workout.objects.bulk_create(workouts)
+        # Insertar entrenamientos directamente usando PyMongo
+        self.stdout.write("Creating workouts...")
+        workout_docs = []
+        for workout_data in test_data["workouts"]:
+            # Extraer duración del nombre (asumiendo un formato como "Cycling Training")
+            if "Cycling" in workout_data["name"]:
+                duration = 60
+            elif "Crossfit" in workout_data["name"]:
+                duration = 120
+            elif "Running" in workout_data["name"]:
+                duration = 90
+            elif "Strength" in workout_data["name"]:
+                duration = 30
+            else:  # Swimming
+                duration = 75
+                
+            workout_docs.append({
+                "_id": ObjectId(),
+                "name": workout_data["name"],
+                "description": workout_data["description"],
+                "duration": duration
+            })
+        
+        db.tracker_app_workout.insert_many(workout_docs)
+        self.stdout.write(f"Created {len(workout_docs)} workouts")
 
         self.stdout.write(self.style.SUCCESS('Successfully populated the database with test data.'))

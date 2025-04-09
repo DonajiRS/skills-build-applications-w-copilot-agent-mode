@@ -1,10 +1,12 @@
 from djongo import models
 from djongo.models.fields import ObjectIdField
+from bson import ObjectId
 
 class User(models.Model):
-    id = ObjectIdField(primary_key=True)
+    # Using AutoField for id instead of ObjectIdField to avoid migration issues
+    # _id still accesible in MongoDB
     email = models.EmailField(unique=True)
-    name = models.CharField(max_length=255)
+    name = models.CharField(max_length=100)
     age = models.IntegerField()
 
     def __str__(self):
@@ -14,8 +16,10 @@ class User(models.Model):
         app_label = 'tracker_app'
 
 class Team(models.Model):
-    name = models.CharField(max_length=255)
-    members = models.ArrayField(model_container=User)
+    # Using AutoField for id instead of ObjectIdField to avoid migration issues
+    # _id still accesible in MongoDB
+    name = models.CharField(max_length=100)
+    members = models.ManyToManyField(User)  # More compatible than ArrayField
 
     def __str__(self):
         return self.name
@@ -24,8 +28,10 @@ class Team(models.Model):
         app_label = 'tracker_app'
 
 class Activity(models.Model):
+    # Using AutoField for id instead of ObjectIdField to avoid migration issues
+    # _id still accesible in MongoDB
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    type = models.CharField(max_length=50)
+    type = models.CharField(max_length=100)
     duration = models.IntegerField()  # in minutes
     date = models.DateField()
 
@@ -36,6 +42,8 @@ class Activity(models.Model):
         app_label = 'tracker_app'
 
 class Leaderboard(models.Model):
+    # Using AutoField for id instead of ObjectIdField to avoid migration issues
+    # _id still accesible in MongoDB
     team = models.ForeignKey(Team, on_delete=models.CASCADE)
     points = models.IntegerField()
 
@@ -46,7 +54,9 @@ class Leaderboard(models.Model):
         app_label = 'tracker_app'
 
 class Workout(models.Model):
-    name = models.CharField(max_length=255)
+    # Using AutoField for id instead of ObjectIdField to avoid migration issues
+    # _id still accesible in MongoDB
+    name = models.CharField(max_length=100)
     description = models.TextField()
     duration = models.IntegerField()  # in minutes
 
