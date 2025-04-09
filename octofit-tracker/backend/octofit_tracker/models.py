@@ -3,8 +3,7 @@ from djongo.models.fields import ObjectIdField
 from bson import ObjectId
 
 class User(models.Model):
-    # Using AutoField for id instead of ObjectIdField to avoid migration issues
-    # _id still accesible in MongoDB
+    id = models.ObjectIdField(primary_key=True)
     email = models.EmailField(unique=True)
     name = models.CharField(max_length=100)
     age = models.IntegerField()
